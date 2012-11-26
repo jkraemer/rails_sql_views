@@ -12,21 +12,32 @@ module RailsSqlViews
         true
       end
       
-      def base_tables(name = nil) #:nodoc:
-        tables = []
-        execute("SHOW FULL TABLES WHERE TABLE_TYPE='BASE TABLE'").each{|row| tables << row[0]}
-        tables
+      def base_tables(name = nil, database = nil, like = nil) #:nodoc:
+        tables_or_views 'BASE TABLE', name, database, like
       end
       alias nonview_tables base_tables
       
-      def views(name = nil) #:nodoc:
-        views = []
-        execute("SHOW FULL TABLES WHERE TABLE_TYPE='VIEW'").each{|row| views << row[0]}
-        views
+      def views(name = nil, database = nil, like = nil) #:nodoc:
+        tables_or_views 'VIEW', name, database, like
       end
 
-      def tables_with_views_included(name = nil)
-        nonview_tables(name) + views(name)
+      def tables_or_views(table_type = nil, name = nil, database = nil, like = nil)
+        sql = "SHOW FULL TABLES "
+        sql << "IN #{quote_table_name(database)} " if database
+        sql << "WHERE TABLE_TYPE='#{table_type}' "
+
+        tables = execute_and_free(sql, 'SCHEMA') do |result|
+          result.collect { |field| field.first }
+        end
+        # it is not easy to query the table name colum when the database name
+        # is unknown (tables_in_<dbname>), thats why we do the filtering like this:
+        tables = tables.select{|t| t =~ /#{like}i/} if like
+        return tables
+      end
+      private :tables_or_views
+
+      def tables_with_views_included(name = nil, database = nil, like = nil)
+        nonview_tables(name, database, like) + views(name, database, like)
       end
       
       def structure_dump
